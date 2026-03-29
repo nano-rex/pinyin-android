@@ -16,6 +16,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ConvoyPinyinImeService extends InputMethodService {
+    private enum InputMode {
+        SIMPLIFIED,
+        TRADITIONAL,
+        ENGLISH
+    }
+
     private static final String[] ROW1 = {"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"};
     private static final String[] ROW2 = {"a", "s", "d", "f", "g", "h", "j", "k", "l"};
     private static final String[] ROW3 = {"Shift", "z", "x", "c", "v", "b", "n", "m", "⌫"};
@@ -26,7 +32,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private final StringBuilder composing = new StringBuilder();
     private final List<String> currentCandidates = new ArrayList<>();
     private int candidateOffset = 0;
-    private boolean chineseMode = true;
+    private InputMode inputMode = InputMode.SIMPLIFIED;
     private boolean shiftOn = false;
     private boolean symbolsMode = false;
 
@@ -107,7 +113,15 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
     private String labelFor(String key) {
         if ("中".equals(key) || "En".equals(key)) {
-            return chineseMode ? getString(R.string.mode_cn) : getString(R.string.mode_en);
+            switch (inputMode) {
+                case TRADITIONAL:
+                    return getString(R.string.mode_tw);
+                case ENGLISH:
+                    return getString(R.string.mode_en);
+                case SIMPLIFIED:
+                default:
+                    return getString(R.string.mode_cn);
+            }
         }
         if ("Shift".equals(key)) {
             return getString(R.string.key_shift);
@@ -154,7 +168,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
                 return;
             case "中":
             case "En":
-                chineseMode = !chineseMode;
+                cycleInputMode();
                 symbolsMode = false;
                 rebuildKeyboard();
                 refreshCandidates();
@@ -168,6 +182,21 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
     }
 
+    private void cycleInputMode() {
+        switch (inputMode) {
+            case SIMPLIFIED:
+                inputMode = InputMode.TRADITIONAL;
+                break;
+            case TRADITIONAL:
+                inputMode = InputMode.ENGLISH;
+                break;
+            case ENGLISH:
+            default:
+                inputMode = InputMode.SIMPLIFIED;
+                break;
+        }
+    }
+
     private void handleTextKey(InputConnection ic, String key) {
         String value = labelFor(key);
         char ch = value.charAt(0);
@@ -176,7 +205,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
             ic.commitText(value, 1);
             return;
         }
-        if (!chineseMode) {
+        if (inputMode == InputMode.ENGLISH) {
             commitComposing(ic);
             ic.commitText(String.valueOf(ch), 1);
             if (shiftOn) {
@@ -209,7 +238,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
     private void handleSpace(InputConnection ic) {
         if (composing.length() > 0) {
-            List<String> candidates = engine.getCandidates(composing.toString());
+            List<String> candidates = getCandidates();
             if (!candidates.isEmpty()) {
                 commitCandidate(ic, candidates.get(0));
                 return;
@@ -224,12 +253,19 @@ public class ConvoyPinyinImeService extends InputMethodService {
         if (composing.length() == 0) {
             return;
         }
-        List<String> candidates = engine.getCandidates(composing.toString());
+        List<String> candidates = getCandidates();
         if (!candidates.isEmpty()) {
             commitCandidate(ic, candidates.get(0));
         } else {
             commitComposingAsRaw(ic);
         }
+    }
+
+    private List<String> getCandidates() {
+        PinyinEngine.ScriptMode scriptMode = inputMode == InputMode.TRADITIONAL
+            ? PinyinEngine.ScriptMode.TRADITIONAL
+            : PinyinEngine.ScriptMode.SIMPLIFIED;
+        return engine.getCandidates(composing.toString(), scriptMode);
     }
 
     private void commitComposingAsRaw(InputConnection ic) {
@@ -270,7 +306,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
         candidateContainer.removeAllViews();
         currentCandidates.clear();
-        currentCandidates.addAll(engine.getCandidates(composing.toString()));
+        currentCandidates.addAll(getCandidates());
         int end = Math.min(candidateOffset + 5, currentCandidates.size());
         for (int i = candidateOffset; i < end; i++) {
             final String candidate = currentCandidates.get(i);
