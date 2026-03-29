@@ -13,6 +13,7 @@
     <string name="mode_tw">繁</string>
     <string name="key_shift">Shift</string>
     <string name="key_backspace">⌫</string>
+    <string name="key_back_to_letters">ABC</string>
     <string name="key_space">Space</string>
     <string name="key_enter">Enter</string>
     <string name="key_symbols">符</string>

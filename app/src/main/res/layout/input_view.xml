@@ -6,6 +6,38 @@
     android:padding="4dp">
 
     <LinearLayout
+        android:id="@+id/mode_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/mode_simplified"
+            style="@style/Widget.ConvoyPinyin.KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/mode_cn" />
+
+        <Button
+            android:id="@+id/mode_traditional"
+            style="@style/Widget.ConvoyPinyin.KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/mode_tw" />
+
+        <Button
+            android:id="@+id/mode_english"
+            style="@style/Widget.ConvoyPinyin.KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/mode_en" />
+    </LinearLayout>
+
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"

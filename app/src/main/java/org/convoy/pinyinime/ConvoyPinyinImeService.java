@@ -33,8 +33,11 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private static final String[] ROW1 = {"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"};
     private static final String[] ROW2 = {"a", "s", "d", "f", "g", "h", "j", "k", "l"};
     private static final String[] ROW3 = {"Shift", "z", "x", "c", "v", "b", "n", "m", "⌫"};
-    private static final String[] ROW4 = {"中", "符", ",", "Space", ".", "Enter"};
-    private static final String[] SYMBOLS = {"，", "。", "？", "！", "：", "；", "（", "）", "“", "”", "、", "-"};
+    private static final String[] ROW4 = {"符", ",", "Space", ".", "Enter"};
+    private static final String[] SYMBOL_ROW1 = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"};
+    private static final String[] SYMBOL_ROW2 = {"-", "/", ":", ";", "(", ")", "$", "&", "@", "\""};
+    private static final String[] SYMBOL_ROW3 = {"。", "，", "？", "！", "：", "；", "（", "）", "、", "⌫"};
+    private static final String[] SYMBOL_ROW4 = {"ABC", ".", ",", "Space", "Enter"};
 
     private final PinyinEngine engine = new PinyinEngine();
     private final StringBuilder composing = new StringBuilder();
@@ -48,6 +51,9 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private LinearLayout candidateContainer;
     private Button candidatePrev;
     private Button candidateNext;
+    private Button modeSimplified;
+    private Button modeTraditional;
+    private Button modeEnglish;
     private LinearLayout row1;
     private LinearLayout row2;
     private LinearLayout row3;
@@ -62,6 +68,9 @@ public class ConvoyPinyinImeService extends InputMethodService {
         candidateContainer = root.findViewById(R.id.candidate_container);
         candidatePrev = root.findViewById(R.id.candidate_prev);
         candidateNext = root.findViewById(R.id.candidate_next);
+        modeSimplified = root.findViewById(R.id.mode_simplified);
+        modeTraditional = root.findViewById(R.id.mode_traditional);
+        modeEnglish = root.findViewById(R.id.mode_english);
         row1 = root.findViewById(R.id.row1);
         row2 = root.findViewById(R.id.row2);
         row3 = root.findViewById(R.id.row3);
@@ -69,6 +78,9 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
         candidatePrev.setOnClickListener(v -> pageCandidates(-5));
         candidateNext.setOnClickListener(v -> pageCandidates(5));
+        modeSimplified.setOnClickListener(v -> setInputMode(InputMode.SIMPLIFIED));
+        modeTraditional.setOnClickListener(v -> setInputMode(InputMode.TRADITIONAL));
+        modeEnglish.setOnClickListener(v -> setInputMode(InputMode.ENGLISH));
 
         rebuildKeyboard();
         applyThemeColors();
@@ -92,10 +104,17 @@ public class ConvoyPinyinImeService extends InputMethodService {
         row2.removeAllViews();
         row3.removeAllViews();
         row4.removeAllViews();
-        addRow(row1, ROW1);
-        addRow(row2, ROW2);
-        addRow(row3, ROW3);
-        addRow(row4, symbolsMode ? SYMBOLS : ROW4);
+        if (symbolsMode) {
+            addRow(row1, SYMBOL_ROW1);
+            addRow(row2, SYMBOL_ROW2);
+            addRow(row3, SYMBOL_ROW3);
+            addRow(row4, SYMBOL_ROW4);
+        } else {
+            addRow(row1, ROW1);
+            addRow(row2, ROW2);
+            addRow(row3, ROW3);
+            addRow(row4, ROW4);
+        }
         applyThemeColors();
     }
 
@@ -118,24 +137,13 @@ public class ConvoyPinyinImeService extends InputMethodService {
     }
 
     private float widthFor(String key) {
-        if ("Shift".equals(key) || "⌫".equals(key) || "中".equals(key) || "En".equals(key) || "符".equals(key) || "Space".equals(key) || "Enter".equals(key)) {
+        if ("Shift".equals(key) || "⌫".equals(key) || "符".equals(key) || "ABC".equals(key) || "Space".equals(key) || "Enter".equals(key)) {
             return 1.5f;
         }
         return 1f;
     }
 
     private String labelFor(String key) {
-        if ("中".equals(key) || "En".equals(key)) {
-            switch (inputMode) {
-                case TRADITIONAL:
-                    return getString(R.string.mode_tw);
-                case ENGLISH:
-                    return getString(R.string.mode_en);
-                case SIMPLIFIED:
-                default:
-                    return getString(R.string.mode_cn);
-            }
-        }
         if ("Shift".equals(key)) {
             return getString(R.string.key_shift);
         }
@@ -150,6 +158,9 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
         if ("符".equals(key)) {
             return getString(R.string.key_symbols);
+        }
+        if ("ABC".equals(key)) {
+            return getString(R.string.key_back_to_letters);
         }
         if (key.length() == 1 && Character.isLetter(key.charAt(0))) {
             return shiftOn ? key.toUpperCase() : key;
@@ -179,15 +190,12 @@ public class ConvoyPinyinImeService extends InputMethodService {
                 ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
                 ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER));
                 return;
-            case "中":
-            case "En":
-                cycleInputMode();
-                symbolsMode = false;
-                rebuildKeyboard();
-                refreshCandidates();
-                return;
             case "符":
-                symbolsMode = !symbolsMode;
+                symbolsMode = true;
+                rebuildKeyboard();
+                return;
+            case "ABC":
+                symbolsMode = false;
                 rebuildKeyboard();
                 return;
             default:
@@ -195,26 +203,17 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
     }
 
-    private void cycleInputMode() {
-        switch (inputMode) {
-            case SIMPLIFIED:
-                inputMode = InputMode.TRADITIONAL;
-                break;
-            case TRADITIONAL:
-                inputMode = InputMode.ENGLISH;
-                break;
-            case ENGLISH:
-            default:
-                inputMode = InputMode.SIMPLIFIED;
-                break;
-        }
+    private void setInputMode(InputMode nextMode) {
+        inputMode = nextMode;
+        symbolsMode = false;
+        rebuildKeyboard();
+        refreshCandidates();
     }
 
     private void handleTextKey(InputConnection ic, String key) {
         String value = labelFor(key);
         char ch = value.charAt(0);
         if (symbolsMode) {
-            commitComposing(ic);
             ic.commitText(value, 1);
             return;
         }
@@ -374,6 +373,9 @@ public class ConvoyPinyinImeService extends InputMethodService {
         composingText.setTextColor(text);
         styleButton(candidatePrev);
         styleButton(candidateNext);
+        styleModeButton(modeSimplified, inputMode == InputMode.SIMPLIFIED, darkMode);
+        styleModeButton(modeTraditional, inputMode == InputMode.TRADITIONAL, darkMode);
+        styleModeButton(modeEnglish, inputMode == InputMode.ENGLISH, darkMode);
         styleChildren(row1);
         styleChildren(row2);
         styleChildren(row3);
@@ -397,5 +399,17 @@ public class ConvoyPinyinImeService extends InputMethodService {
         boolean darkMode = ImePreferences.isDarkMode(this);
         button.setTextColor(darkMode ? DARK_TEXT : LIGHT_TEXT);
         button.setBackgroundColor(darkMode ? DARK_PANEL : Color.WHITE);
+    }
+
+    private void styleModeButton(Button button, boolean active, boolean darkMode) {
+        if (button == null) {
+            return;
+        }
+        button.setTextColor(darkMode ? DARK_TEXT : LIGHT_TEXT);
+        if (active) {
+            button.setBackgroundColor(darkMode ? Color.parseColor("#3B4E2D") : Color.parseColor("#CFE6B8"));
+        } else {
+            button.setBackgroundColor(darkMode ? DARK_PANEL : Color.WHITE);
+        }
     }
 }
