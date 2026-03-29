@@ -20,9 +20,11 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private static final int LIGHT_BG = Color.parseColor("#EAEAEA");
     private static final int LIGHT_PANEL = Color.parseColor("#D8D8D8");
     private static final int LIGHT_TEXT = Color.parseColor("#111111");
+    private static final int LIGHT_ACTIVE = Color.parseColor("#B9DFFF");
     private static final int DARK_BG = Color.parseColor("#1B1B1B");
     private static final int DARK_PANEL = Color.parseColor("#2A2A2A");
     private static final int DARK_TEXT = Color.parseColor("#F2F2F2");
+    private static final int DARK_ACTIVE = Color.parseColor("#3A6F99");
 
     private enum InputMode {
         SIMPLIFIED,
@@ -137,7 +139,10 @@ public class ConvoyPinyinImeService extends InputMethodService {
     }
 
     private float widthFor(String key) {
-        if ("Shift".equals(key) || "⌫".equals(key) || "符".equals(key) || "ABC".equals(key) || "Space".equals(key) || "Enter".equals(key)) {
+        if ("Space".equals(key)) {
+            return 2.0f;
+        }
+        if ("Shift".equals(key) || "⌫".equals(key) || "符".equals(key) || "ABC".equals(key) || "Enter".equals(key)) {
             return 1.5f;
         }
         return 1f;
@@ -407,7 +412,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
         button.setTextColor(darkMode ? DARK_TEXT : LIGHT_TEXT);
         if (active) {
-            button.setBackgroundColor(darkMode ? Color.parseColor("#3B4E2D") : Color.parseColor("#CFE6B8"));
+            button.setBackgroundColor(darkMode ? DARK_ACTIVE : LIGHT_ACTIVE);
         } else {
             button.setBackgroundColor(darkMode ? DARK_PANEL : Color.WHITE);
         }
