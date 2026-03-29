@@ -4,10 +4,11 @@ Minimal offline Android keyboard inspired by Google Pinyin Input.
 
 ## Current scope
 - qwerty on-screen keyboard
-- Chinese / English mode toggle
+- Simplified / Traditional Chinese / English mode cycle
 - offline pinyin candidate strip
 - punctuation/symbol toggle
 - backspace, space, enter, shift
+- dark mode toggle
 - launcher activity for enable/select flow
 
 ## Not included
