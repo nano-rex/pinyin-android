@@ -1,6 +1,7 @@
 package org.convoy.pinyinime;
 
 import android.inputmethodservice.InputMethodService;
+import android.graphics.Color;
 import android.os.Build;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -16,6 +17,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ConvoyPinyinImeService extends InputMethodService {
+    private static final int LIGHT_BG = Color.parseColor("#EAEAEA");
+    private static final int LIGHT_PANEL = Color.parseColor("#D8D8D8");
+    private static final int LIGHT_TEXT = Color.parseColor("#111111");
+    private static final int DARK_BG = Color.parseColor("#1B1B1B");
+    private static final int DARK_PANEL = Color.parseColor("#2A2A2A");
+    private static final int DARK_TEXT = Color.parseColor("#F2F2F2");
+
     private enum InputMode {
         SIMPLIFIED,
         TRADITIONAL,
@@ -44,10 +52,12 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private LinearLayout row2;
     private LinearLayout row3;
     private LinearLayout row4;
+    private View rootView;
 
     @Override
     public View onCreateInputView() {
         View root = getLayoutInflater().inflate(R.layout.input_view, null);
+        rootView = root;
         composingText = root.findViewById(R.id.composing_text);
         candidateContainer = root.findViewById(R.id.candidate_container);
         candidatePrev = root.findViewById(R.id.candidate_prev);
@@ -61,6 +71,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         candidateNext.setOnClickListener(v -> pageCandidates(5));
 
         rebuildKeyboard();
+        applyThemeColors();
         refreshComposingUi();
         refreshCandidates();
         return root;
@@ -71,6 +82,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         super.onStartInput(attribute, restarting);
         composing.setLength(0);
         candidateOffset = 0;
+        applyThemeColors();
         refreshComposingUi();
         refreshCandidates();
     }
@@ -84,6 +96,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         addRow(row2, ROW2);
         addRow(row3, ROW3);
         addRow(row4, symbolsMode ? SYMBOLS : ROW4);
+        applyThemeColors();
     }
 
     private void addRow(LinearLayout row, String[] keys) {
@@ -313,6 +326,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
             Button button = new Button(this);
             button.setText(candidate);
             button.setSingleLine(true);
+            styleButton(button);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             lp.setMargins(4, 0, 4, 0);
             button.setLayoutParams(lp);
@@ -344,5 +358,44 @@ public class ConvoyPinyinImeService extends InputMethodService {
             candidateOffset = next;
             refreshCandidates();
         }
+    }
+
+    private void applyThemeColors() {
+        if (rootView == null || composingText == null || candidatePrev == null || candidateNext == null) {
+            return;
+        }
+        boolean darkMode = ImePreferences.isDarkMode(this);
+        int bg = darkMode ? DARK_BG : LIGHT_BG;
+        int panel = darkMode ? DARK_PANEL : LIGHT_PANEL;
+        int text = darkMode ? DARK_TEXT : LIGHT_TEXT;
+
+        rootView.setBackgroundColor(bg);
+        composingText.setBackgroundColor(panel);
+        composingText.setTextColor(text);
+        styleButton(candidatePrev);
+        styleButton(candidateNext);
+        styleChildren(row1);
+        styleChildren(row2);
+        styleChildren(row3);
+        styleChildren(row4);
+        styleChildren(candidateContainer);
+    }
+
+    private void styleChildren(ViewGroup parent) {
+        if (parent == null) {
+            return;
+        }
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            View child = parent.getChildAt(i);
+            if (child instanceof Button) {
+                styleButton((Button) child);
+            }
+        }
+    }
+
+    private void styleButton(Button button) {
+        boolean darkMode = ImePreferences.isDarkMode(this);
+        button.setTextColor(darkMode ? DARK_TEXT : LIGHT_TEXT);
+        button.setBackgroundColor(darkMode ? DARK_PANEL : Color.WHITE);
     }
 }

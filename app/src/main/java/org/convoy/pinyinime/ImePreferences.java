@@ -1,0 +1,24 @@
+package org.convoy.pinyinime;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+
+public final class ImePreferences {
+    private static final String PREFS_NAME = "convoy_pinyin_prefs";
+    private static final String KEY_DARK_MODE = "dark_mode";
+
+    private ImePreferences() {
+    }
+
+    public static boolean isDarkMode(Context context) {
+        return prefs(context).getBoolean(KEY_DARK_MODE, false);
+    }
+
+    public static void setDarkMode(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_DARK_MODE, enabled).commit();
+    }
+
+    private static SharedPreferences prefs(Context context) {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+    }
+}

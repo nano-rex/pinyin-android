@@ -7,19 +7,29 @@ import android.provider.Settings;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
+import android.widget.Switch;
 
 public class SetupActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        setTheme(ImePreferences.isDarkMode(this)
+            ? android.R.style.Theme_DeviceDefault_NoActionBar
+            : android.R.style.Theme_DeviceDefault_Light_NoActionBar);
         super.onCreate(savedInstanceState);
-        setTheme(android.R.style.Theme_DeviceDefault_Light_NoActionBar);
         setContentView(R.layout.activity_setup);
 
         Button openSettings = findViewById(R.id.open_input_settings);
         Button openPicker = findViewById(R.id.open_input_picker);
+        Switch darkMode = findViewById(R.id.dark_mode_toggle);
 
         openSettings.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)));
         openPicker.setOnClickListener(this::showPicker);
+
+        darkMode.setChecked(ImePreferences.isDarkMode(this));
+        darkMode.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            ImePreferences.setDarkMode(this, isChecked);
+            recreate();
+        });
     }
 
     private void showPicker(View ignored) {
