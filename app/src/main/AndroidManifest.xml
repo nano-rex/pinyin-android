@@ -7,7 +7,7 @@
         android:supportsRtl="true">
 
         <activity
-            android:name=".SetupActivity"
+            android:name="org.convoy.pinyinime.SetupActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -16,7 +16,7 @@
         </activity>
 
         <service
-            android:name=".ConvoyPinyinImeService"
+            android:name="org.convoy.pinyinime.ConvoyPinyinImeService"
             android:permission="android.permission.BIND_INPUT_METHOD"
             android:exported="true">
             <intent-filter>
