@@ -3,6 +3,8 @@ package org.convoy.pinyinime;
 import android.graphics.Color;
 import android.inputmethodservice.InputMethodService;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -54,9 +56,12 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private static final String[] CN_SYMBOL_ROW2 = {"（", "）", "《", "》", "“", "”", "‘", "’", "￥", "'"};
     private static final String[] CN_SYMBOL_ROW3 = {"。", "，", "？", "！", "：", "；", "、", "…", "—", KEY_BACKSPACE};
     private static final String[] CN_SYMBOL_ROW4 = {KEY_LETTERS, "·", KEY_SPACE, "～", KEY_ENTER};
+    private static final long REPEAT_INITIAL_DELAY_MS = 350L;
+    private static final long REPEAT_INTERVAL_MS = 60L;
 
     private PinyinEngine pinyinEngine;
     private EnglishEngine englishEngine;
+    private final Handler repeatHandler = new Handler(Looper.getMainLooper());
     private final StringBuilder composing = new StringBuilder();
     private final List<String> currentCandidates = new ArrayList<>();
     private int candidateOffset = 0;
@@ -68,14 +73,16 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private LinearLayout candidateContainer;
     private Button candidatePrev;
     private Button candidateNext;
-    private Button modeSimplified;
-    private Button modeTraditional;
-    private Button modeEnglish;
+    private Button modeSwitch;
     private LinearLayout row1;
     private LinearLayout row2;
     private LinearLayout row3;
     private LinearLayout row4;
     private View rootView;
+    private Runnable repeatRunnable;
+    private Button repeatingButton;
+    private String repeatingKey;
+    private boolean repeatTriggered;
 
     @Override
     public View onCreateInputView() {
@@ -91,9 +98,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         candidateContainer = root.findViewById(R.id.candidate_container);
         candidatePrev = root.findViewById(R.id.candidate_prev);
         candidateNext = root.findViewById(R.id.candidate_next);
-        modeSimplified = root.findViewById(R.id.mode_simplified);
-        modeTraditional = root.findViewById(R.id.mode_traditional);
-        modeEnglish = root.findViewById(R.id.mode_english);
+        modeSwitch = root.findViewById(R.id.mode_switch);
         row1 = root.findViewById(R.id.row1);
         row2 = root.findViewById(R.id.row2);
         row3 = root.findViewById(R.id.row3);
@@ -101,14 +106,10 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
         candidatePrev.setOnClickListener(v -> pageCandidates(-5));
         candidateNext.setOnClickListener(v -> pageCandidates(5));
-        modeEnglish.setOnClickListener(v -> setInputMode(InputMode.ENGLISH));
-        modeSimplified.setOnClickListener(v -> setInputMode(InputMode.SIMPLIFIED));
-        modeTraditional.setOnClickListener(v -> setInputMode(InputMode.TRADITIONAL));
+        modeSwitch.setOnClickListener(v -> cycleInputMode());
         installPressFeedback(candidatePrev);
         installPressFeedback(candidateNext);
-        installPressFeedback(modeEnglish);
-        installPressFeedback(modeSimplified);
-        installPressFeedback(modeTraditional);
+        installPressFeedback(modeSwitch);
 
         rebuildKeyboard();
         applyThemeColors();
@@ -120,6 +121,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     @Override
     public void onStartInput(EditorInfo attribute, boolean restarting) {
         super.onStartInput(attribute, restarting);
+        stopRepeat();
         composing.setLength(0);
         candidateOffset = 0;
         refreshComposingUi();
@@ -166,8 +168,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, widthFor(key));
             lp.setMargins(2, 2, 2, 2);
             button.setLayoutParams(lp);
-            button.setOnClickListener(v -> onKeyPressed(key));
-            installPressFeedback(button);
+            installKeyTouchHandler(button, key);
             row.addView(button);
         }
     }
@@ -251,6 +252,21 @@ public class ConvoyPinyinImeService extends InputMethodService {
         refreshCandidates();
     }
 
+    private void cycleInputMode() {
+        switch (inputMode) {
+            case ENGLISH:
+                setInputMode(InputMode.SIMPLIFIED);
+                break;
+            case SIMPLIFIED:
+                setInputMode(InputMode.TRADITIONAL);
+                break;
+            case TRADITIONAL:
+            default:
+                setInputMode(InputMode.ENGLISH);
+                break;
+        }
+    }
+
     private void handleTextKey(InputConnection ic, String key) {
         String value = labelFor(key);
         char ch = value.charAt(0);
@@ -298,7 +314,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private void handleSpace(InputConnection ic) {
         if (composing.length() > 0) {
             List<String> candidates = getCandidates();
-            if (!candidates.isEmpty()) {
+            if (!candidates.isEmpty() && shouldAutoCommitTopCandidate()) {
                 commitCandidate(ic, candidates.get(0));
             } else {
                 commitComposingAsRaw(ic);
@@ -316,11 +332,15 @@ public class ConvoyPinyinImeService extends InputMethodService {
             return;
         }
         List<String> candidates = getCandidates();
-        if (!candidates.isEmpty()) {
+        if (!candidates.isEmpty() && shouldAutoCommitTopCandidate()) {
             commitCandidate(ic, candidates.get(0));
         } else {
             commitComposingAsRaw(ic);
         }
+    }
+
+    private boolean shouldAutoCommitTopCandidate() {
+        return inputMode != InputMode.ENGLISH || ImePreferences.isAutoCorrectEnabled(this);
     }
 
     private List<String> getCandidates() {
@@ -425,11 +445,38 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
     }
 
+    private void installKeyTouchHandler(Button button, String key) {
+        button.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    repeatTriggered = false;
+                    stylePressed(button);
+                    if (isRepeatableKey(key)) {
+                        startRepeat(button, key);
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    boolean triggered = repeatTriggered;
+                    stopRepeat();
+                    if (!triggered) {
+                        onKeyPressed(key);
+                    }
+                    applyThemeColors();
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    stopRepeat();
+                    applyThemeColors();
+                    return true;
+                default:
+                    return false;
+            }
+        });
+    }
+
     private void installPressFeedback(Button button) {
         button.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                boolean darkMode = ImePreferences.isDarkMode(this);
-                button.setBackgroundColor(darkMode ? DARK_ACTIVE : LIGHT_ACTIVE);
+                stylePressed(button);
             } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
                 button.post(this::applyThemeColors);
             }
@@ -437,8 +484,51 @@ public class ConvoyPinyinImeService extends InputMethodService {
         });
     }
 
+    private void stylePressed(Button button) {
+        boolean darkMode = ImePreferences.isDarkMode(this);
+        button.setBackgroundColor(darkMode ? DARK_ACTIVE : LIGHT_ACTIVE);
+    }
+
+    private boolean isRepeatableKey(String key) {
+        return !KEY_SHIFT.equals(key)
+            && !KEY_SYMBOLS.equals(key)
+            && !KEY_LETTERS.equals(key)
+            && !KEY_ENTER.equals(key);
+    }
+
+    private void startRepeat(Button button, String key) {
+        stopRepeat();
+        repeatingButton = button;
+        repeatingKey = key;
+        repeatRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (repeatingKey == null) {
+                    return;
+                }
+                repeatTriggered = true;
+                onKeyPressed(repeatingKey);
+                if (repeatingButton != null) {
+                    stylePressed(repeatingButton);
+                }
+                repeatHandler.postDelayed(this, REPEAT_INTERVAL_MS);
+            }
+        };
+        repeatHandler.postDelayed(repeatRunnable, REPEAT_INITIAL_DELAY_MS);
+    }
+
+    private void stopRepeat() {
+        if (repeatRunnable != null) {
+            repeatHandler.removeCallbacks(repeatRunnable);
+        }
+        repeatRunnable = null;
+        repeatingButton = null;
+        repeatingKey = null;
+        repeatTriggered = false;
+    }
+
     private void applyThemeColors() {
-        if (rootView == null || composingText == null || candidatePrev == null || candidateNext == null) {
+        if (rootView == null || composingText == null || candidatePrev == null || candidateNext == null || modeSwitch == null) {
             return;
         }
         boolean darkMode = ImePreferences.isDarkMode(this);
@@ -451,9 +541,8 @@ public class ConvoyPinyinImeService extends InputMethodService {
         composingText.setTextColor(text);
         styleButton(candidatePrev);
         styleButton(candidateNext);
-        styleModeButton(modeEnglish, inputMode == InputMode.ENGLISH, darkMode);
-        styleModeButton(modeSimplified, inputMode == InputMode.SIMPLIFIED, darkMode);
-        styleModeButton(modeTraditional, inputMode == InputMode.TRADITIONAL, darkMode);
+        modeSwitch.setText(labelForCurrentMode());
+        styleModeButton(modeSwitch, true, darkMode);
         styleChildren(row1);
         styleChildren(row2);
         styleChildren(row3);
@@ -485,5 +574,17 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
         button.setTextColor(darkMode ? DARK_TEXT : LIGHT_TEXT);
         button.setBackgroundColor(active ? (darkMode ? DARK_ACTIVE : LIGHT_ACTIVE) : (darkMode ? DARK_PANEL : Color.WHITE));
+    }
+
+    private String labelForCurrentMode() {
+        switch (inputMode) {
+            case ENGLISH:
+                return getString(R.string.mode_en);
+            case TRADITIONAL:
+                return getString(R.string.mode_tw);
+            case SIMPLIFIED:
+            default:
+                return getString(R.string.mode_cn);
+        }
     }
 }

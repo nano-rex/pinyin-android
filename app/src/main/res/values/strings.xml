@@ -8,6 +8,7 @@
     <string name="open_input_picker">Open input picker</string>
     <string name="setup_note">Core features only: offline pinyin candidates, Simplified/Traditional Chinese, English mode, punctuation, backspace, space, enter.</string>
     <string name="dark_mode">Dark mode</string>
+    <string name="auto_correct">Auto correct English</string>
     <string name="mode_cn">中</string>
     <string name="mode_en">En</string>
     <string name="mode_tw">繁</string>

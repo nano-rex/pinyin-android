@@ -21,6 +21,7 @@ public class SetupActivity extends Activity {
         Button openSettings = findViewById(R.id.open_input_settings);
         Button openPicker = findViewById(R.id.open_input_picker);
         Switch darkMode = findViewById(R.id.dark_mode_toggle);
+        Switch autoCorrect = findViewById(R.id.auto_correct_toggle);
 
         openSettings.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)));
         openPicker.setOnClickListener(this::showPicker);
@@ -30,6 +31,10 @@ public class SetupActivity extends Activity {
             ImePreferences.setDarkMode(this, isChecked);
             recreate();
         });
+
+        autoCorrect.setChecked(ImePreferences.isAutoCorrectEnabled(this));
+        autoCorrect.setOnCheckedChangeListener((buttonView, isChecked) ->
+            ImePreferences.setAutoCorrectEnabled(this, isChecked));
     }
 
     private void showPicker(View ignored) {

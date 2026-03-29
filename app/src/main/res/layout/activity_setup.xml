@@ -36,6 +36,13 @@
             android:layout_marginTop="12dp"
             android:text="@string/dark_mode" />
 
+        <Switch
+            android:id="@+id/auto_correct_toggle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/auto_correct" />
+
         <Button
             android:id="@+id/open_input_settings"
             style="@style/Widget.ConvoyPinyin.KeyButton"
