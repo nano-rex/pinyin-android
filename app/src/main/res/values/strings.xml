@@ -20,4 +20,5 @@
     <string name="candidate_prev">‹</string>
     <string name="candidate_next">›</string>
     <string name="composing_hint">拼音</string>
+    <string name="composing_hint_en">English</string>
 </resources>

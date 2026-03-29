@@ -33,5 +33,7 @@ Minimal offline Android keyboard inspired by Google Pinyin Input.
 
 ## Dictionary data
 - Candidates are loaded from `app/src/main/assets/pinyin_lexicon.tsv`.
-- The asset is generated from CC-CEDICT with `tools/build_lexicon.py`.
+- English suggestions are loaded from `app/src/main/assets/english_words.txt`.
+- The pinyin asset is generated from CC-CEDICT with `tools/build_lexicon.py`.
+- The English word asset is generated from `data/google-10000-english.txt` with `tools/build_english_words.py`.
 - Simplified and Traditional candidates are stored side by side for offline lookup.
