@@ -11,7 +11,7 @@
     <string name="mode_cn">中</string>
     <string name="mode_en">En</string>
     <string name="mode_tw">繁</string>
-    <string name="key_shift">Shift</string>
+    <string name="key_shift">↑</string>
     <string name="key_backspace">⌫</string>
     <string name="key_back_to_letters">ABC</string>
     <string name="key_space">Space</string>
