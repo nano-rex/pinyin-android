@@ -41,7 +41,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private static final String[] SYMBOL_ROW3 = {"。", "，", "？", "！", "：", "；", "（", "）", "、", "⌫"};
     private static final String[] SYMBOL_ROW4 = {"ABC", ".", ",", "Space", "Enter"};
 
-    private final PinyinEngine engine = new PinyinEngine();
+    private PinyinEngine engine;
     private final StringBuilder composing = new StringBuilder();
     private final List<String> currentCandidates = new ArrayList<>();
     private int candidateOffset = 0;
@@ -66,6 +66,9 @@ public class ConvoyPinyinImeService extends InputMethodService {
     public View onCreateInputView() {
         View root = getLayoutInflater().inflate(R.layout.input_view, null);
         rootView = root;
+        if (engine == null) {
+            engine = new PinyinEngine(this);
+        }
         composingText = root.findViewById(R.id.composing_text);
         candidateContainer = root.findViewById(R.id.candidate_container);
         candidatePrev = root.findViewById(R.id.candidate_prev);
