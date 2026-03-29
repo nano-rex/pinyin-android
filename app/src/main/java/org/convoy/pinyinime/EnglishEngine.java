@@ -33,18 +33,42 @@ public class EnglishEngine {
             return Collections.emptyList();
         }
 
-        LinkedHashSet<String> results = new LinkedHashSet<>();
-        addAliasMatches(results, input);
+        LinkedHashSet<String> matches = new LinkedHashSet<>();
+        addAliasMatches(matches, input);
         for (String word : WORDS) {
             if (!word.startsWith(input)) {
                 continue;
             }
-            results.add(word);
+            matches.add(word);
+            if (matches.size() >= MAX_CANDIDATES) {
+                break;
+            }
+        }
+
+        if (matches.isEmpty()) {
+            return Collections.singletonList(input);
+        }
+
+        ArrayList<String> results = new ArrayList<>(Math.min(MAX_CANDIDATES, matches.size() + 1));
+        String first = null;
+        for (String match : matches) {
+            first = match;
+            results.add(match);
+            break;
+        }
+        if (!input.equals(first)) {
+            results.add(input);
+        }
+        for (String match : matches) {
+            if (match.equals(first) || match.equals(input)) {
+                continue;
+            }
+            results.add(match);
             if (results.size() >= MAX_CANDIDATES) {
                 break;
             }
         }
-        return new ArrayList<>(results);
+        return results;
     }
 
     private static void addAliasMatches(LinkedHashSet<String> results, String input) {
