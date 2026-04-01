@@ -46,12 +46,6 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private static final String KEY_SYMBOLS = "Symbols";
     private static final String KEY_LETTERS = "ABC";
     private static final String KEY_MORE_SYMBOLS = "=\\<";
-    private static final int SHIFT_OFF = 0;
-    private static final int SHIFT_ONCE = 1;
-    private static final int SHIFT_LOCK = 2;
-    private static final int ENGLISH_CASE_NORMAL = 0;
-    private static final int ENGLISH_CASE_CAPITALIZE = 1;
-    private static final int ENGLISH_CASE_ALL_CAPS = 2;
 
     private static final String[] ROW1 = {"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"};
     private static final String[] ROW2 = {"a", "s", "d", "f", "g", "h", "j", "k", "l"};
@@ -84,8 +78,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private final StringBuilder composing = new StringBuilder();
     private final List<String> currentCandidates = new ArrayList<>();
     private InputMode inputMode = InputMode.ENGLISH;
-    private int shiftState = SHIFT_OFF;
-    private int englishWordCase = ENGLISH_CASE_NORMAL;
+    private boolean shiftOn = false;
     private boolean symbolsMode = false;
     private boolean symbolsPageTwo = false;
     private boolean suggestionsExpanded = false;
@@ -179,8 +172,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         super.onStartInput(attribute, restarting);
         stopRepeat();
         composing.setLength(0);
-        englishWordCase = ENGLISH_CASE_NORMAL;
-        shiftState = SHIFT_OFF;
+        shiftOn = false;
         refreshComposingUi();
         refreshCandidates();
         updateSuggestionPanelVisibility();
@@ -289,7 +281,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
             return KEY_MORE_SYMBOLS;
         }
         if (key.length() == 1 && Character.isLetter(key.charAt(0))) {
-            return isUppercaseActive() ? key.toUpperCase() : key;
+            return shiftOn ? key.toUpperCase() : key;
         }
         return key;
     }
@@ -302,7 +294,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
         switch (key) {
             case KEY_SHIFT:
-                handleShiftPress();
+                shiftOn = !shiftOn;
                 rebuildKeyboard();
                 return;
             case KEY_BACKSPACE:
@@ -359,54 +351,40 @@ public class ConvoyPinyinImeService extends InputMethodService {
     }
 
     private void handleTextKey(InputConnection ic, String key) {
-        boolean consumeShift = shiftState == SHIFT_ONCE;
         String value = labelFor(key);
         char ch = value.charAt(0);
         if (symbolsMode) {
             commitComposingForCurrentMode(ic);
             ic.commitText(value, 1);
-            consumeShiftIfNeeded(consumeShift);
             return;
         }
 
         if (inputMode == InputMode.ENGLISH) {
             if (pinyinEngine.isComposingChar(ch)) {
-                if (composing.length() == 0) {
-                    englishWordCase = Character.isUpperCase(ch)
-                            ? (shiftState == SHIFT_LOCK ? ENGLISH_CASE_ALL_CAPS : ENGLISH_CASE_CAPITALIZE)
-                            : ENGLISH_CASE_NORMAL;
-                }
                 composing.append(Character.toLowerCase(ch));
                 ic.commitText(String.valueOf(ch), 1);
-                consumeShiftIfNeeded(consumeShift);
                 refreshComposingUi();
                 refreshCandidates();
                 return;
             }
             clearComposingState();
             ic.commitText(String.valueOf(ch), 1);
-            consumeShiftIfNeeded(consumeShift);
             return;
         }
 
         if (pinyinEngine.isComposingChar(ch)) {
             composing.append(Character.toLowerCase(ch));
-            consumeShiftIfNeeded(consumeShift);
             refreshComposingUi();
             refreshCandidates();
             return;
         }
         commitComposingForCurrentMode(ic);
         ic.commitText(String.valueOf(ch), 1);
-        consumeShiftIfNeeded(consumeShift);
     }
 
     private void handleBackspace(InputConnection ic) {
         if (inputMode == InputMode.ENGLISH && composing.length() > 0) {
             composing.deleteCharAt(composing.length() - 1);
-            if (composing.length() == 0) {
-                englishWordCase = ENGLISH_CASE_NORMAL;
-            }
             ic.deleteSurroundingText(1, 0);
             refreshComposingUi();
             refreshCandidates();
@@ -478,16 +456,10 @@ public class ConvoyPinyinImeService extends InputMethodService {
     }
 
     private String formatForEnglish(String text) {
-        if (inputMode != InputMode.ENGLISH || text.isEmpty()) {
+        if (inputMode != InputMode.ENGLISH || !shiftOn || text.isEmpty()) {
             return text;
         }
-        if (englishWordCase == ENGLISH_CASE_ALL_CAPS) {
-            return text.toUpperCase();
-        }
-        if (englishWordCase == ENGLISH_CASE_CAPITALIZE) {
-            return Character.toUpperCase(text.charAt(0)) + text.substring(1);
-        }
-        return text;
+        return Character.toUpperCase(text.charAt(0)) + text.substring(1);
     }
 
     private void applyAutoCorrectIfNeeded(InputConnection ic) {
@@ -508,30 +480,8 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
     private void clearComposingState() {
         composing.setLength(0);
-        englishWordCase = ENGLISH_CASE_NORMAL;
         refreshComposingUi();
         refreshCandidates();
-    }
-
-    private boolean isUppercaseActive() {
-        return shiftState == SHIFT_ONCE || shiftState == SHIFT_LOCK;
-    }
-
-    private void consumeShiftIfNeeded(boolean consumeShift) {
-        if (consumeShift) {
-            shiftState = SHIFT_OFF;
-            rebuildKeyboard();
-        }
-    }
-
-    private void handleShiftPress() {
-        if (shiftState == SHIFT_OFF) {
-            shiftState = SHIFT_ONCE;
-        } else if (shiftState == SHIFT_ONCE) {
-            shiftState = SHIFT_LOCK;
-        } else {
-            shiftState = SHIFT_OFF;
-        }
     }
 
     private void refreshComposingUi() {
