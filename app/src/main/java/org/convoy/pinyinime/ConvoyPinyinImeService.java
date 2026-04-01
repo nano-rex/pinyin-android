@@ -1,5 +1,6 @@
 package org.convoy.pinyinime;
 
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.inputmethodservice.InputMethodService;
 import android.os.Build;
@@ -16,6 +17,7 @@ import android.widget.Button;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import java.util.ArrayList;
@@ -81,7 +83,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private final Handler repeatHandler = new Handler(Looper.getMainLooper());
     private final StringBuilder composing = new StringBuilder();
     private final List<String> currentCandidates = new ArrayList<>();
-    private InputMode inputMode = InputMode.SIMPLIFIED;
+    private InputMode inputMode = InputMode.ENGLISH;
     private int shiftState = SHIFT_OFF;
     private int englishWordCase = ENGLISH_CASE_NORMAL;
     private boolean symbolsMode = false;
@@ -99,8 +101,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private LinearLayout suggestionList;
     private ScrollView suggestionScroll;
     private LinearLayout suggestionPanel;
-    private Button suggestionUp;
-    private Button suggestionDown;
+    private SeekBar suggestionSlider;
     private LinearLayout row1;
     private LinearLayout row2;
     private LinearLayout row3;
@@ -110,6 +111,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private Button repeatingButton;
     private String repeatingKey;
     private boolean repeatTriggered;
+    private boolean syncingSuggestionSlider;
 
     @Override
     public View onCreateInputView() {
@@ -132,8 +134,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         suggestionList = root.findViewById(R.id.suggestion_list);
         suggestionScroll = root.findViewById(R.id.suggestion_scroll);
         suggestionPanel = root.findViewById(R.id.suggestion_panel);
-        suggestionUp = root.findViewById(R.id.suggestion_up);
-        suggestionDown = root.findViewById(R.id.suggestion_down);
+        suggestionSlider = root.findViewById(R.id.suggestion_slider);
         row1 = root.findViewById(R.id.row1);
         row2 = root.findViewById(R.id.row2);
         row3 = root.findViewById(R.id.row3);
@@ -147,10 +148,24 @@ public class ConvoyPinyinImeService extends InputMethodService {
         installPressFeedback(candidateNext);
         installPressFeedback(candidateExpand);
         installPressFeedback(modeSwitch);
-        suggestionUp.setOnClickListener(v -> scrollSuggestionPanel(-1));
-        suggestionDown.setOnClickListener(v -> scrollSuggestionPanel(1));
-        installPressFeedback(suggestionUp);
-        installPressFeedback(suggestionDown);
+        suggestionSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (!fromUser || suggestionScroll == null || syncingSuggestionSlider) {
+                    return;
+                }
+                suggestionScroll.scrollTo(0, progress);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+        suggestionScroll.getViewTreeObserver().addOnScrollChangedListener(this::syncSuggestionSlider);
 
         rebuildKeyboard();
         applyThemeColors();
@@ -246,13 +261,19 @@ public class ConvoyPinyinImeService extends InputMethodService {
             return getString(R.string.key_shift);
         }
         if (KEY_SPACE.equals(key)) {
-            return inputMode == InputMode.ENGLISH
-                    ? getString(R.string.key_space)
+            if (inputMode == InputMode.ENGLISH) {
+                return getString(R.string.key_space);
+            }
+            return inputMode == InputMode.TRADITIONAL
+                    ? getString(R.string.key_space_tw)
                     : getString(R.string.key_space_cn);
         }
         if (KEY_ENTER.equals(key)) {
-            return inputMode == InputMode.ENGLISH
-                    ? getString(R.string.key_enter)
+            if (inputMode == InputMode.ENGLISH) {
+                return getString(R.string.key_enter);
+            }
+            return inputMode == InputMode.TRADITIONAL
+                    ? getString(R.string.key_enter_tw)
                     : getString(R.string.key_enter_cn);
         }
         if (KEY_BACKSPACE.equals(key)) {
@@ -530,6 +551,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
         currentCandidates.clear();
         currentCandidates.addAll(getCandidates());
+        LinearLayout currentSuggestionRow = null;
         for (int i = 0; i < currentCandidates.size(); i++) {
             final String candidate = currentCandidates.get(i);
             Button button = new Button(this);
@@ -547,19 +569,25 @@ public class ConvoyPinyinImeService extends InputMethodService {
                 }
             });
             candidateContainer.addView(button);
-            addExpandedCandidate(candidate);
+            if (i % 3 == 0) {
+                currentSuggestionRow = createSuggestionRow();
+                suggestionList.addView(currentSuggestionRow);
+            }
+            addExpandedCandidate(currentSuggestionRow, candidate);
         }
         boolean hasCandidates = !currentCandidates.isEmpty();
         candidatePrev.setEnabled(hasCandidates);
         candidateNext.setEnabled(hasCandidates);
         candidateExpand.setEnabled(hasCandidates);
-        suggestionUp.setEnabled(hasCandidates);
-        suggestionDown.setEnabled(hasCandidates);
+        suggestionSlider.setEnabled(hasCandidates);
         if (candidateScroll != null) {
             candidateScroll.post(() -> candidateScroll.scrollTo(0, 0));
         }
         if (suggestionScroll != null) {
-            suggestionScroll.post(() -> suggestionScroll.scrollTo(0, 0));
+            suggestionScroll.post(() -> {
+                suggestionScroll.scrollTo(0, 0);
+                syncSuggestionSlider();
+            });
         }
         if (!hasCandidates && suggestionsExpanded) {
             suggestionsExpanded = false;
@@ -576,20 +604,32 @@ public class ConvoyPinyinImeService extends InputMethodService {
         candidateScroll.smoothScrollBy(deltaPx, 0);
     }
 
-    private void addExpandedCandidate(String candidate) {
-        if (suggestionList == null) {
+    private LinearLayout createSuggestionRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, 4);
+        row.setLayoutParams(lp);
+        return row;
+    }
+
+    private void addExpandedCandidate(LinearLayout row, String candidate) {
+        if (suggestionList == null || row == null) {
             return;
         }
         Button button = new Button(this);
         button.setText(formatForEnglish(candidate));
         button.setSingleLine(false);
-        button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        button.setGravity(Gravity.CENTER);
         styleButton(button);
         installPressFeedback(button);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 0, 0, 4);
+                0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                1f);
+        lp.setMargins(2, 2, 2, 2);
         button.setLayoutParams(lp);
         button.setOnClickListener(v -> {
             InputConnection ic = getCurrentInputConnection();
@@ -597,7 +637,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
                 commitCandidate(ic, candidate);
             }
         });
-        suggestionList.addView(button);
+        row.addView(button);
     }
 
     private void toggleSuggestionPanel() {
@@ -627,12 +667,16 @@ public class ConvoyPinyinImeService extends InputMethodService {
                 : getString(R.string.candidate_expand));
     }
 
-    private void scrollSuggestionPanel(int direction) {
-        if (suggestionScroll == null || currentCandidates.isEmpty()) {
+    private void syncSuggestionSlider() {
+        if (suggestionSlider == null || suggestionScroll == null || suggestionList == null) {
             return;
         }
-        int deltaPx = Math.max(120, suggestionScroll.getHeight() / 2) * direction;
-        suggestionScroll.smoothScrollBy(0, deltaPx);
+        int scrollRange = Math.max(0, suggestionList.getHeight() - suggestionScroll.getHeight());
+        syncingSuggestionSlider = true;
+        suggestionSlider.setMax(Math.max(1, scrollRange));
+        suggestionSlider.setProgress(Math.min(suggestionScroll.getScrollY(), scrollRange));
+        suggestionSlider.setEnabled(scrollRange > 0 && !currentCandidates.isEmpty());
+        syncingSuggestionSlider = false;
     }
 
     private void installKeyTouchHandler(Button button, String key) {
@@ -733,10 +777,13 @@ public class ConvoyPinyinImeService extends InputMethodService {
         styleButton(candidatePrev);
         styleButton(candidateNext);
         styleButton(candidateExpand);
-        styleButton(suggestionUp);
-        styleButton(suggestionDown);
         if (suggestionScroll != null) {
             suggestionScroll.setBackgroundColor(panel);
+        }
+        if (suggestionSlider != null && Build.VERSION.SDK_INT >= 21) {
+            ColorStateList tint = ColorStateList.valueOf(darkMode ? DARK_ACTIVE : LIGHT_ACTIVE);
+            suggestionSlider.setThumbTintList(tint);
+            suggestionSlider.setProgressTintList(tint);
         }
         modeSwitch.setText(labelForCurrentMode());
         styleModeButton(modeSwitch, true, darkMode);

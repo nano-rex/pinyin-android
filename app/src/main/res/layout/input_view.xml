@@ -117,24 +117,15 @@
             android:layout_width="48dp"
             android:layout_height="match_parent"
             android:layout_marginStart="4dp"
+            android:gravity="center"
             android:orientation="vertical">
 
-            <Button
-                android:id="@+id/suggestion_up"
-                style="@style/Widget.ConvoyPinyin.KeyButton"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:text="@string/suggestion_up" />
-
-            <Button
-                android:id="@+id/suggestion_down"
-                style="@style/Widget.ConvoyPinyin.KeyButton"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:layout_marginTop="4dp"
-                android:text="@string/suggestion_down" />
+            <SeekBar
+                android:id="@+id/suggestion_slider"
+                android:layout_width="220dp"
+                android:layout_height="48dp"
+                android:max="100"
+                android:rotation="270" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>
