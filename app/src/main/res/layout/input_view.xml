@@ -20,6 +20,7 @@
             android:text="@string/candidate_prev" />
 
         <HorizontalScrollView
+            android:id="@+id/candidate_scroll"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"

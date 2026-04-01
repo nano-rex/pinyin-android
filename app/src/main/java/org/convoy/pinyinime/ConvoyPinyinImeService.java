@@ -13,6 +13,7 @@ import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.widget.Button;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -41,6 +42,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private static final String KEY_ENTER = "Enter";
     private static final String KEY_SYMBOLS = "Symbols";
     private static final String KEY_LETTERS = "ABC";
+    private static final String KEY_MORE_SYMBOLS = "=<";
 
     private static final String[] ROW1 = {"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"};
     private static final String[] ROW2 = {"a", "s", "d", "f", "g", "h", "j", "k", "l"};
@@ -50,12 +52,20 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private static final String[] EN_SYMBOL_ROW1 = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"};
     private static final String[] EN_SYMBOL_ROW2 = {"-", "/", ":", ";", "(", ")", "$", "&", "@", "'"};
     private static final String[] EN_SYMBOL_ROW3 = {".", ",", "?", "!", "\"", "#", "%", "*", "+", KEY_BACKSPACE};
-    private static final String[] EN_SYMBOL_ROW4 = {KEY_LETTERS, "=", KEY_SPACE, "_", KEY_ENTER};
+    private static final String[] EN_SYMBOL_ROW4 = {KEY_MORE_SYMBOLS, "=", KEY_SPACE, "_", KEY_ENTER};
+    private static final String[] EN_SYMBOL2_ROW1 = {"[", "]", "{", "}", "<", ">", "^", "~", "|", "\\"};
+    private static final String[] EN_SYMBOL2_ROW2 = {"`", "_", "+", "=", "€", "£", "¥", "•", "§", "©"};
+    private static final String[] EN_SYMBOL2_ROW3 = {"®", "™", "✓", "×", "÷", "°", "¶", "∆", "√", KEY_BACKSPACE};
+    private static final String[] EN_SYMBOL2_ROW4 = {KEY_SYMBOLS, ";", KEY_SPACE, ":", KEY_ENTER};
 
     private static final String[] CN_SYMBOL_ROW1 = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"};
     private static final String[] CN_SYMBOL_ROW2 = {"（", "）", "《", "》", "“", "”", "‘", "’", "￥", "'"};
     private static final String[] CN_SYMBOL_ROW3 = {"。", "，", "？", "！", "：", "；", "、", "…", "—", KEY_BACKSPACE};
-    private static final String[] CN_SYMBOL_ROW4 = {KEY_LETTERS, "·", KEY_SPACE, "～", KEY_ENTER};
+    private static final String[] CN_SYMBOL_ROW4 = {KEY_MORE_SYMBOLS, "·", KEY_SPACE, "～", KEY_ENTER};
+    private static final String[] CN_SYMBOL2_ROW1 = {"【", "】", "「", "」", "『", "』", "〈", "〉", "〔", "〕"};
+    private static final String[] CN_SYMBOL2_ROW2 = {"※", "￥", "€", "°", "㎡", "→", "←", "↑", "↓", "±"};
+    private static final String[] CN_SYMBOL2_ROW3 = {"＋", "＝", "／", "＼", "＿", "﹣", "％", "＃", "＊", KEY_BACKSPACE};
+    private static final String[] CN_SYMBOL2_ROW4 = {KEY_SYMBOLS, "｜", KEY_SPACE, "～", KEY_ENTER};
     private static final long REPEAT_INITIAL_DELAY_MS = 350L;
     private static final long REPEAT_INTERVAL_MS = 60L;
 
@@ -64,13 +74,14 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private final Handler repeatHandler = new Handler(Looper.getMainLooper());
     private final StringBuilder composing = new StringBuilder();
     private final List<String> currentCandidates = new ArrayList<>();
-    private int candidateOffset = 0;
     private InputMode inputMode = InputMode.SIMPLIFIED;
     private boolean shiftOn = false;
     private boolean symbolsMode = false;
+    private boolean symbolsPageTwo = false;
 
     private TextView composingText;
     private LinearLayout candidateContainer;
+    private HorizontalScrollView candidateScroll;
     private Button candidatePrev;
     private Button candidateNext;
     private Button modeSwitch;
@@ -96,6 +107,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
         composingText = root.findViewById(R.id.composing_text);
         candidateContainer = root.findViewById(R.id.candidate_container);
+        candidateScroll = root.findViewById(R.id.candidate_scroll);
         candidatePrev = root.findViewById(R.id.candidate_prev);
         candidateNext = root.findViewById(R.id.candidate_next);
         modeSwitch = root.findViewById(R.id.mode_switch);
@@ -104,8 +116,8 @@ public class ConvoyPinyinImeService extends InputMethodService {
         row3 = root.findViewById(R.id.row3);
         row4 = root.findViewById(R.id.row4);
 
-        candidatePrev.setOnClickListener(v -> pageCandidates(-5));
-        candidateNext.setOnClickListener(v -> pageCandidates(5));
+        candidatePrev.setOnClickListener(v -> scrollCandidates(-1));
+        candidateNext.setOnClickListener(v -> scrollCandidates(1));
         modeSwitch.setOnClickListener(v -> cycleInputMode());
         installPressFeedback(candidatePrev);
         installPressFeedback(candidateNext);
@@ -123,7 +135,6 @@ public class ConvoyPinyinImeService extends InputMethodService {
         super.onStartInput(attribute, restarting);
         stopRepeat();
         composing.setLength(0);
-        candidateOffset = 0;
         refreshComposingUi();
         refreshCandidates();
         applyThemeColors();
@@ -136,15 +147,29 @@ public class ConvoyPinyinImeService extends InputMethodService {
         row4.removeAllViews();
         if (symbolsMode) {
             if (inputMode == InputMode.ENGLISH) {
-                addRow(row1, EN_SYMBOL_ROW1);
-                addRow(row2, EN_SYMBOL_ROW2);
-                addRow(row3, EN_SYMBOL_ROW3);
-                addRow(row4, EN_SYMBOL_ROW4);
+                if (symbolsPageTwo) {
+                    addRow(row1, EN_SYMBOL2_ROW1);
+                    addRow(row2, EN_SYMBOL2_ROW2);
+                    addRow(row3, EN_SYMBOL2_ROW3);
+                    addRow(row4, EN_SYMBOL2_ROW4);
+                } else {
+                    addRow(row1, EN_SYMBOL_ROW1);
+                    addRow(row2, EN_SYMBOL_ROW2);
+                    addRow(row3, EN_SYMBOL_ROW3);
+                    addRow(row4, EN_SYMBOL_ROW4);
+                }
             } else {
-                addRow(row1, CN_SYMBOL_ROW1);
-                addRow(row2, CN_SYMBOL_ROW2);
-                addRow(row3, CN_SYMBOL_ROW3);
-                addRow(row4, CN_SYMBOL_ROW4);
+                if (symbolsPageTwo) {
+                    addRow(row1, CN_SYMBOL2_ROW1);
+                    addRow(row2, CN_SYMBOL2_ROW2);
+                    addRow(row3, CN_SYMBOL2_ROW3);
+                    addRow(row4, CN_SYMBOL2_ROW4);
+                } else {
+                    addRow(row1, CN_SYMBOL_ROW1);
+                    addRow(row2, CN_SYMBOL_ROW2);
+                    addRow(row3, CN_SYMBOL_ROW3);
+                    addRow(row4, CN_SYMBOL_ROW4);
+                }
             }
         } else {
             addRow(row1, ROW1);
@@ -203,6 +228,9 @@ public class ConvoyPinyinImeService extends InputMethodService {
         if (KEY_LETTERS.equals(key)) {
             return getString(R.string.key_back_to_letters);
         }
+        if (KEY_MORE_SYMBOLS.equals(key)) {
+            return KEY_MORE_SYMBOLS;
+        }
         if (key.length() == 1 && Character.isLetter(key.charAt(0))) {
             return shiftOn ? key.toUpperCase() : key;
         }
@@ -233,10 +261,17 @@ public class ConvoyPinyinImeService extends InputMethodService {
                 return;
             case KEY_SYMBOLS:
                 symbolsMode = true;
+                symbolsPageTwo = false;
+                rebuildKeyboard();
+                return;
+            case KEY_MORE_SYMBOLS:
+                symbolsMode = true;
+                symbolsPageTwo = !symbolsPageTwo;
                 rebuildKeyboard();
                 return;
             case KEY_LETTERS:
                 symbolsMode = false;
+                symbolsPageTwo = false;
                 rebuildKeyboard();
                 return;
             default:
@@ -246,7 +281,6 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
     private void setInputMode(InputMode nextMode) {
         inputMode = nextMode;
-        candidateOffset = 0;
         rebuildKeyboard();
         refreshComposingUi();
         refreshCandidates();
@@ -279,7 +313,6 @@ public class ConvoyPinyinImeService extends InputMethodService {
         if (inputMode == InputMode.ENGLISH) {
             if (pinyinEngine.isComposingChar(ch)) {
                 composing.append(Character.toLowerCase(ch));
-                candidateOffset = 0;
                 refreshComposingUi();
                 refreshCandidates();
                 return;
@@ -291,7 +324,6 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
         if (pinyinEngine.isComposingChar(ch)) {
             composing.append(Character.toLowerCase(ch));
-            candidateOffset = 0;
             refreshComposingUi();
             refreshCandidates();
             return;
@@ -303,7 +335,6 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private void handleBackspace(InputConnection ic) {
         if (composing.length() > 0) {
             composing.deleteCharAt(composing.length() - 1);
-            candidateOffset = 0;
             refreshComposingUi();
             refreshCandidates();
         } else {
@@ -313,12 +344,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
     private void handleSpace(InputConnection ic) {
         if (composing.length() > 0) {
-            List<String> candidates = getCandidates();
-            if (!candidates.isEmpty() && shouldAutoCommitTopCandidate()) {
-                commitCandidate(ic, candidates.get(0));
-            } else {
-                commitComposingAsRaw(ic);
-            }
+            commitComposingAsRaw(ic);
             if (inputMode == InputMode.ENGLISH) {
                 ic.commitText(" ", 1);
             }
@@ -331,16 +357,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         if (composing.length() == 0) {
             return;
         }
-        List<String> candidates = getCandidates();
-        if (!candidates.isEmpty() && shouldAutoCommitTopCandidate()) {
-            commitCandidate(ic, candidates.get(0));
-        } else {
-            commitComposingAsRaw(ic);
-        }
-    }
-
-    private boolean shouldAutoCommitTopCandidate() {
-        return inputMode != InputMode.ENGLISH || ImePreferences.isAutoCorrectEnabled(this);
+        commitComposingAsRaw(ic);
     }
 
     private List<String> getCandidates() {
@@ -362,7 +379,6 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
         ic.commitText(formatForEnglish(composing.toString()), 1);
         composing.setLength(0);
-        candidateOffset = 0;
         refreshComposingUi();
         refreshCandidates();
     }
@@ -370,7 +386,6 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private void commitCandidate(InputConnection ic, String candidate) {
         ic.commitText(formatForEnglish(candidate), 1);
         composing.setLength(0);
-        candidateOffset = 0;
         refreshComposingUi();
         refreshCandidates();
     }
@@ -404,8 +419,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         candidateContainer.removeAllViews();
         currentCandidates.clear();
         currentCandidates.addAll(getCandidates());
-        int end = Math.min(candidateOffset + 5, currentCandidates.size());
-        for (int i = candidateOffset; i < end; i++) {
+        for (int i = 0; i < currentCandidates.size(); i++) {
             final String candidate = currentCandidates.get(i);
             Button button = new Button(this);
             button.setText(formatForEnglish(candidate));
@@ -424,25 +438,19 @@ public class ConvoyPinyinImeService extends InputMethodService {
             candidateContainer.addView(button);
         }
         boolean hasCandidates = !currentCandidates.isEmpty();
-        candidatePrev.setEnabled(hasCandidates && candidateOffset > 0);
-        candidateNext.setEnabled(hasCandidates && candidateOffset + 5 < currentCandidates.size());
+        candidatePrev.setEnabled(hasCandidates);
+        candidateNext.setEnabled(hasCandidates);
+        if (candidateScroll != null) {
+            candidateScroll.post(() -> candidateScroll.scrollTo(0, 0));
+        }
     }
 
-    private void pageCandidates(int delta) {
-        if (currentCandidates.isEmpty()) {
+    private void scrollCandidates(int direction) {
+        if (currentCandidates.isEmpty() || candidateScroll == null) {
             return;
         }
-        int next = candidateOffset + delta;
-        if (next < 0) {
-            next = 0;
-        }
-        if (next >= currentCandidates.size()) {
-            next = Math.max(0, currentCandidates.size() - 5);
-        }
-        if (next != candidateOffset) {
-            candidateOffset = next;
-            refreshCandidates();
-        }
+        int deltaPx = Math.max(120, candidateScroll.getWidth() / 2) * direction;
+        candidateScroll.smoothScrollBy(deltaPx, 0);
     }
 
     private void installKeyTouchHandler(Button button, String key) {
