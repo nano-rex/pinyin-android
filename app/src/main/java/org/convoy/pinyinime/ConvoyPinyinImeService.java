@@ -15,6 +15,7 @@ import android.view.inputmethod.InputConnection;
 import android.widget.Button;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.util.ArrayList;
@@ -42,7 +43,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private static final String KEY_ENTER = "Enter";
     private static final String KEY_SYMBOLS = "Symbols";
     private static final String KEY_LETTERS = "ABC";
-    private static final String KEY_MORE_SYMBOLS = "=<";
+    private static final String KEY_MORE_SYMBOLS = "=\\<";
     private static final int SHIFT_OFF = 0;
     private static final int SHIFT_ONCE = 1;
     private static final int SHIFT_LOCK = 2;
@@ -57,21 +58,21 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
     private static final String[] EN_SYMBOL_ROW1 = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"};
     private static final String[] EN_SYMBOL_ROW2 = {"-", "/", ":", ";", "(", ")", "$", "&", "@", "'"};
-    private static final String[] EN_SYMBOL_ROW3 = {".", ",", "?", "!", "\"", "#", "%", "*", "+", KEY_BACKSPACE};
-    private static final String[] EN_SYMBOL_ROW4 = {KEY_MORE_SYMBOLS, KEY_LETTERS, KEY_SPACE, KEY_ENTER};
+    private static final String[] EN_SYMBOL_ROW3 = {KEY_MORE_SYMBOLS, ".", ",", "?", "!", "\"", "#", "%", "*", KEY_BACKSPACE};
+    private static final String[] EN_SYMBOL_ROW4 = {KEY_LETTERS, "=", KEY_SPACE, KEY_ENTER};
     private static final String[] EN_SYMBOL2_ROW1 = {"[", "]", "{", "}", "<", ">", "^", "~", "|", "\\"};
     private static final String[] EN_SYMBOL2_ROW2 = {"`", "_", "+", "=", "€", "£", "¥", "•", "§", "©"};
-    private static final String[] EN_SYMBOL2_ROW3 = {"®", "™", "✓", "×", "÷", "°", "¶", "∆", "√", KEY_BACKSPACE};
-    private static final String[] EN_SYMBOL2_ROW4 = {KEY_SYMBOLS, KEY_LETTERS, KEY_SPACE, KEY_ENTER};
+    private static final String[] EN_SYMBOL2_ROW3 = {KEY_SYMBOLS, "®", "™", "✓", "×", "÷", "°", "¶", "∆", KEY_BACKSPACE};
+    private static final String[] EN_SYMBOL2_ROW4 = {KEY_LETTERS, ";", KEY_SPACE, KEY_ENTER};
 
     private static final String[] CN_SYMBOL_ROW1 = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"};
     private static final String[] CN_SYMBOL_ROW2 = {"（", "）", "《", "》", "“", "”", "‘", "’", "￥", "'"};
-    private static final String[] CN_SYMBOL_ROW3 = {"。", "，", "？", "！", "：", "；", "、", "…", "—", KEY_BACKSPACE};
-    private static final String[] CN_SYMBOL_ROW4 = {KEY_MORE_SYMBOLS, KEY_LETTERS, KEY_SPACE, KEY_ENTER};
+    private static final String[] CN_SYMBOL_ROW3 = {KEY_MORE_SYMBOLS, "。", "，", "？", "！", "：", "；", "、", "…", KEY_BACKSPACE};
+    private static final String[] CN_SYMBOL_ROW4 = {KEY_LETTERS, "·", KEY_SPACE, KEY_ENTER};
     private static final String[] CN_SYMBOL2_ROW1 = {"【", "】", "「", "」", "『", "』", "〈", "〉", "〔", "〕"};
     private static final String[] CN_SYMBOL2_ROW2 = {"※", "￥", "€", "°", "㎡", "→", "←", "↑", "↓", "±"};
-    private static final String[] CN_SYMBOL2_ROW3 = {"＋", "＝", "／", "＼", "＿", "﹣", "％", "＃", "＊", KEY_BACKSPACE};
-    private static final String[] CN_SYMBOL2_ROW4 = {KEY_SYMBOLS, KEY_LETTERS, KEY_SPACE, KEY_ENTER};
+    private static final String[] CN_SYMBOL2_ROW3 = {KEY_SYMBOLS, "＋", "＝", "／", "＼", "＿", "﹣", "％", "＃", KEY_BACKSPACE};
+    private static final String[] CN_SYMBOL2_ROW4 = {KEY_LETTERS, "｜", KEY_SPACE, KEY_ENTER};
     private static final long REPEAT_INITIAL_DELAY_MS = 350L;
     private static final long REPEAT_INTERVAL_MS = 60L;
 
@@ -85,13 +86,21 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private int englishWordCase = ENGLISH_CASE_NORMAL;
     private boolean symbolsMode = false;
     private boolean symbolsPageTwo = false;
+    private boolean suggestionsExpanded = false;
 
     private TextView composingText;
     private LinearLayout candidateContainer;
     private HorizontalScrollView candidateScroll;
     private Button candidatePrev;
     private Button candidateNext;
+    private Button candidateExpand;
     private Button modeSwitch;
+    private LinearLayout keyboardContainer;
+    private LinearLayout suggestionList;
+    private ScrollView suggestionScroll;
+    private LinearLayout suggestionPanel;
+    private Button suggestionUp;
+    private Button suggestionDown;
     private LinearLayout row1;
     private LinearLayout row2;
     private LinearLayout row3;
@@ -117,7 +126,14 @@ public class ConvoyPinyinImeService extends InputMethodService {
         candidateScroll = root.findViewById(R.id.candidate_scroll);
         candidatePrev = root.findViewById(R.id.candidate_prev);
         candidateNext = root.findViewById(R.id.candidate_next);
+        candidateExpand = root.findViewById(R.id.candidate_expand);
         modeSwitch = root.findViewById(R.id.mode_switch);
+        keyboardContainer = root.findViewById(R.id.keyboard_container);
+        suggestionList = root.findViewById(R.id.suggestion_list);
+        suggestionScroll = root.findViewById(R.id.suggestion_scroll);
+        suggestionPanel = root.findViewById(R.id.suggestion_panel);
+        suggestionUp = root.findViewById(R.id.suggestion_up);
+        suggestionDown = root.findViewById(R.id.suggestion_down);
         row1 = root.findViewById(R.id.row1);
         row2 = root.findViewById(R.id.row2);
         row3 = root.findViewById(R.id.row3);
@@ -125,10 +141,16 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
         candidatePrev.setOnClickListener(v -> scrollCandidates(-1));
         candidateNext.setOnClickListener(v -> scrollCandidates(1));
+        candidateExpand.setOnClickListener(v -> toggleSuggestionPanel());
         modeSwitch.setOnClickListener(v -> cycleInputMode());
         installPressFeedback(candidatePrev);
         installPressFeedback(candidateNext);
+        installPressFeedback(candidateExpand);
         installPressFeedback(modeSwitch);
+        suggestionUp.setOnClickListener(v -> scrollSuggestionPanel(-1));
+        suggestionDown.setOnClickListener(v -> scrollSuggestionPanel(1));
+        installPressFeedback(suggestionUp);
+        installPressFeedback(suggestionDown);
 
         rebuildKeyboard();
         applyThemeColors();
@@ -146,6 +168,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         shiftState = SHIFT_OFF;
         refreshComposingUi();
         refreshCandidates();
+        updateSuggestionPanelVisibility();
         applyThemeColors();
     }
 
@@ -223,10 +246,14 @@ public class ConvoyPinyinImeService extends InputMethodService {
             return getString(R.string.key_shift);
         }
         if (KEY_SPACE.equals(key)) {
-            return getString(R.string.key_space);
+            return inputMode == InputMode.ENGLISH
+                    ? getString(R.string.key_space)
+                    : getString(R.string.key_space_cn);
         }
         if (KEY_ENTER.equals(key)) {
-            return getString(R.string.key_enter);
+            return inputMode == InputMode.ENGLISH
+                    ? getString(R.string.key_enter)
+                    : getString(R.string.key_enter_cn);
         }
         if (KEY_BACKSPACE.equals(key)) {
             return getString(R.string.key_backspace);
@@ -254,7 +281,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
         switch (key) {
             case KEY_SHIFT:
-                shiftState = (shiftState + 1) % 3;
+                handleShiftPress();
                 rebuildKeyboard();
                 return;
             case KEY_BACKSPACE:
@@ -340,6 +367,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
         if (pinyinEngine.isComposingChar(ch)) {
             composing.append(Character.toLowerCase(ch));
+            consumeSingleShift();
             refreshComposingUi();
             refreshCandidates();
             return;
@@ -467,6 +495,16 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
     }
 
+    private void handleShiftPress() {
+        if (shiftState == SHIFT_OFF) {
+            shiftState = SHIFT_ONCE;
+        } else if (shiftState == SHIFT_ONCE) {
+            shiftState = SHIFT_LOCK;
+        } else {
+            shiftState = SHIFT_OFF;
+        }
+    }
+
     private void refreshComposingUi() {
         if (composingText == null) {
             return;
@@ -487,6 +525,9 @@ public class ConvoyPinyinImeService extends InputMethodService {
             return;
         }
         candidateContainer.removeAllViews();
+        if (suggestionList != null) {
+            suggestionList.removeAllViews();
+        }
         currentCandidates.clear();
         currentCandidates.addAll(getCandidates());
         for (int i = 0; i < currentCandidates.size(); i++) {
@@ -506,13 +547,25 @@ public class ConvoyPinyinImeService extends InputMethodService {
                 }
             });
             candidateContainer.addView(button);
+            addExpandedCandidate(candidate);
         }
         boolean hasCandidates = !currentCandidates.isEmpty();
         candidatePrev.setEnabled(hasCandidates);
         candidateNext.setEnabled(hasCandidates);
+        candidateExpand.setEnabled(hasCandidates);
+        suggestionUp.setEnabled(hasCandidates);
+        suggestionDown.setEnabled(hasCandidates);
         if (candidateScroll != null) {
             candidateScroll.post(() -> candidateScroll.scrollTo(0, 0));
         }
+        if (suggestionScroll != null) {
+            suggestionScroll.post(() -> suggestionScroll.scrollTo(0, 0));
+        }
+        if (!hasCandidates && suggestionsExpanded) {
+            suggestionsExpanded = false;
+            updateSuggestionPanelVisibility();
+        }
+        updateExpandButtonLabel();
     }
 
     private void scrollCandidates(int direction) {
@@ -521,6 +574,65 @@ public class ConvoyPinyinImeService extends InputMethodService {
         }
         int deltaPx = Math.max(120, candidateScroll.getWidth() / 2) * direction;
         candidateScroll.smoothScrollBy(deltaPx, 0);
+    }
+
+    private void addExpandedCandidate(String candidate) {
+        if (suggestionList == null) {
+            return;
+        }
+        Button button = new Button(this);
+        button.setText(formatForEnglish(candidate));
+        button.setSingleLine(false);
+        button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        styleButton(button);
+        installPressFeedback(button);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, 4);
+        button.setLayoutParams(lp);
+        button.setOnClickListener(v -> {
+            InputConnection ic = getCurrentInputConnection();
+            if (ic != null) {
+                commitCandidate(ic, candidate);
+            }
+        });
+        suggestionList.addView(button);
+    }
+
+    private void toggleSuggestionPanel() {
+        if (currentCandidates.isEmpty()) {
+            return;
+        }
+        suggestionsExpanded = !suggestionsExpanded;
+        updateSuggestionPanelVisibility();
+        applyThemeColors();
+    }
+
+    private void updateSuggestionPanelVisibility() {
+        if (keyboardContainer == null || suggestionPanel == null) {
+            return;
+        }
+        keyboardContainer.setVisibility(suggestionsExpanded ? View.GONE : View.VISIBLE);
+        suggestionPanel.setVisibility(suggestionsExpanded ? View.VISIBLE : View.GONE);
+        updateExpandButtonLabel();
+    }
+
+    private void updateExpandButtonLabel() {
+        if (candidateExpand == null) {
+            return;
+        }
+        candidateExpand.setText(suggestionsExpanded
+                ? getString(R.string.candidate_collapse)
+                : getString(R.string.candidate_expand));
+    }
+
+    private void scrollSuggestionPanel(int direction) {
+        if (suggestionScroll == null || currentCandidates.isEmpty()) {
+            return;
+        }
+        int deltaPx = Math.max(120, suggestionScroll.getHeight() / 2) * direction;
+        suggestionScroll.smoothScrollBy(0, deltaPx);
     }
 
     private void installKeyTouchHandler(Button button, String key) {
@@ -607,7 +719,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     }
 
     private void applyThemeColors() {
-        if (rootView == null || composingText == null || candidatePrev == null || candidateNext == null || modeSwitch == null) {
+        if (rootView == null || composingText == null || candidatePrev == null || candidateNext == null || candidateExpand == null || modeSwitch == null) {
             return;
         }
         boolean darkMode = ImePreferences.isDarkMode(this);
@@ -620,6 +732,12 @@ public class ConvoyPinyinImeService extends InputMethodService {
         composingText.setTextColor(text);
         styleButton(candidatePrev);
         styleButton(candidateNext);
+        styleButton(candidateExpand);
+        styleButton(suggestionUp);
+        styleButton(suggestionDown);
+        if (suggestionScroll != null) {
+            suggestionScroll.setBackgroundColor(panel);
+        }
         modeSwitch.setText(labelForCurrentMode());
         styleModeButton(modeSwitch, true, darkMode);
         styleChildren(row1);
@@ -627,6 +745,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
         styleChildren(row3);
         styleChildren(row4);
         styleChildren(candidateContainer);
+        styleChildren(suggestionList);
     }
 
     private void styleChildren(ViewGroup parent) {

@@ -18,9 +18,15 @@
     <string name="key_back_to_letters">ABC</string>
     <string name="key_space">Space</string>
     <string name="key_enter">Enter</string>
+    <string name="key_space_cn">空格</string>
+    <string name="key_enter_cn">换行</string>
     <string name="key_symbols">\?123</string>
     <string name="candidate_prev">‹</string>
     <string name="candidate_next">›</string>
+    <string name="candidate_expand">▤</string>
+    <string name="candidate_collapse">⌨</string>
+    <string name="suggestion_up">˄</string>
+    <string name="suggestion_down">˅</string>
     <string name="composing_hint">拼音</string>
     <string name="composing_hint_en">English</string>
 </resources>
