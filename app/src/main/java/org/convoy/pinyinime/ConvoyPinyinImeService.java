@@ -289,7 +289,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
             return KEY_MORE_SYMBOLS;
         }
         if (key.length() == 1 && Character.isLetter(key.charAt(0))) {
-            return shiftState == SHIFT_OFF ? key : key.toUpperCase();
+            return isUppercaseActive() ? key.toUpperCase() : key;
         }
         return key;
     }
@@ -359,11 +359,13 @@ public class ConvoyPinyinImeService extends InputMethodService {
     }
 
     private void handleTextKey(InputConnection ic, String key) {
+        boolean consumeShift = shiftState == SHIFT_ONCE;
         String value = labelFor(key);
         char ch = value.charAt(0);
         if (symbolsMode) {
             commitComposingForCurrentMode(ic);
             ic.commitText(value, 1);
+            consumeShiftIfNeeded(consumeShift);
             return;
         }
 
@@ -376,25 +378,27 @@ public class ConvoyPinyinImeService extends InputMethodService {
                 }
                 composing.append(Character.toLowerCase(ch));
                 ic.commitText(String.valueOf(ch), 1);
-                consumeSingleShift();
+                consumeShiftIfNeeded(consumeShift);
                 refreshComposingUi();
                 refreshCandidates();
                 return;
             }
             clearComposingState();
             ic.commitText(String.valueOf(ch), 1);
+            consumeShiftIfNeeded(consumeShift);
             return;
         }
 
         if (pinyinEngine.isComposingChar(ch)) {
             composing.append(Character.toLowerCase(ch));
-            consumeSingleShift();
+            consumeShiftIfNeeded(consumeShift);
             refreshComposingUi();
             refreshCandidates();
             return;
         }
         commitComposingForCurrentMode(ic);
         ic.commitText(String.valueOf(ch), 1);
+        consumeShiftIfNeeded(consumeShift);
     }
 
     private void handleBackspace(InputConnection ic) {
@@ -509,8 +513,12 @@ public class ConvoyPinyinImeService extends InputMethodService {
         refreshCandidates();
     }
 
-    private void consumeSingleShift() {
-        if (shiftState == SHIFT_ONCE) {
+    private boolean isUppercaseActive() {
+        return shiftState == SHIFT_ONCE || shiftState == SHIFT_LOCK;
+    }
+
+    private void consumeShiftIfNeeded(boolean consumeShift) {
+        if (consumeShift) {
             shiftState = SHIFT_OFF;
             rebuildKeyboard();
         }
