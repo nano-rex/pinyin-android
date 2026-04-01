@@ -43,6 +43,12 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private static final String KEY_SYMBOLS = "Symbols";
     private static final String KEY_LETTERS = "ABC";
     private static final String KEY_MORE_SYMBOLS = "=<";
+    private static final int SHIFT_OFF = 0;
+    private static final int SHIFT_ONCE = 1;
+    private static final int SHIFT_LOCK = 2;
+    private static final int ENGLISH_CASE_NORMAL = 0;
+    private static final int ENGLISH_CASE_CAPITALIZE = 1;
+    private static final int ENGLISH_CASE_ALL_CAPS = 2;
 
     private static final String[] ROW1 = {"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"};
     private static final String[] ROW2 = {"a", "s", "d", "f", "g", "h", "j", "k", "l"};
@@ -52,20 +58,20 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private static final String[] EN_SYMBOL_ROW1 = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"};
     private static final String[] EN_SYMBOL_ROW2 = {"-", "/", ":", ";", "(", ")", "$", "&", "@", "'"};
     private static final String[] EN_SYMBOL_ROW3 = {".", ",", "?", "!", "\"", "#", "%", "*", "+", KEY_BACKSPACE};
-    private static final String[] EN_SYMBOL_ROW4 = {KEY_MORE_SYMBOLS, "=", KEY_SPACE, "_", KEY_ENTER};
+    private static final String[] EN_SYMBOL_ROW4 = {KEY_MORE_SYMBOLS, KEY_LETTERS, KEY_SPACE, KEY_ENTER};
     private static final String[] EN_SYMBOL2_ROW1 = {"[", "]", "{", "}", "<", ">", "^", "~", "|", "\\"};
     private static final String[] EN_SYMBOL2_ROW2 = {"`", "_", "+", "=", "€", "£", "¥", "•", "§", "©"};
     private static final String[] EN_SYMBOL2_ROW3 = {"®", "™", "✓", "×", "÷", "°", "¶", "∆", "√", KEY_BACKSPACE};
-    private static final String[] EN_SYMBOL2_ROW4 = {KEY_SYMBOLS, ";", KEY_SPACE, ":", KEY_ENTER};
+    private static final String[] EN_SYMBOL2_ROW4 = {KEY_SYMBOLS, KEY_LETTERS, KEY_SPACE, KEY_ENTER};
 
     private static final String[] CN_SYMBOL_ROW1 = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"};
     private static final String[] CN_SYMBOL_ROW2 = {"（", "）", "《", "》", "“", "”", "‘", "’", "￥", "'"};
     private static final String[] CN_SYMBOL_ROW3 = {"。", "，", "？", "！", "：", "；", "、", "…", "—", KEY_BACKSPACE};
-    private static final String[] CN_SYMBOL_ROW4 = {KEY_MORE_SYMBOLS, "·", KEY_SPACE, "～", KEY_ENTER};
+    private static final String[] CN_SYMBOL_ROW4 = {KEY_MORE_SYMBOLS, KEY_LETTERS, KEY_SPACE, KEY_ENTER};
     private static final String[] CN_SYMBOL2_ROW1 = {"【", "】", "「", "」", "『", "』", "〈", "〉", "〔", "〕"};
     private static final String[] CN_SYMBOL2_ROW2 = {"※", "￥", "€", "°", "㎡", "→", "←", "↑", "↓", "±"};
     private static final String[] CN_SYMBOL2_ROW3 = {"＋", "＝", "／", "＼", "＿", "﹣", "％", "＃", "＊", KEY_BACKSPACE};
-    private static final String[] CN_SYMBOL2_ROW4 = {KEY_SYMBOLS, "｜", KEY_SPACE, "～", KEY_ENTER};
+    private static final String[] CN_SYMBOL2_ROW4 = {KEY_SYMBOLS, KEY_LETTERS, KEY_SPACE, KEY_ENTER};
     private static final long REPEAT_INITIAL_DELAY_MS = 350L;
     private static final long REPEAT_INTERVAL_MS = 60L;
 
@@ -75,7 +81,8 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private final StringBuilder composing = new StringBuilder();
     private final List<String> currentCandidates = new ArrayList<>();
     private InputMode inputMode = InputMode.SIMPLIFIED;
-    private boolean shiftOn = false;
+    private int shiftState = SHIFT_OFF;
+    private int englishWordCase = ENGLISH_CASE_NORMAL;
     private boolean symbolsMode = false;
     private boolean symbolsPageTwo = false;
 
@@ -135,6 +142,8 @@ public class ConvoyPinyinImeService extends InputMethodService {
         super.onStartInput(attribute, restarting);
         stopRepeat();
         composing.setLength(0);
+        englishWordCase = ENGLISH_CASE_NORMAL;
+        shiftState = SHIFT_OFF;
         refreshComposingUi();
         refreshCandidates();
         applyThemeColors();
@@ -203,7 +212,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
             return 3.0f;
         }
         if (KEY_SHIFT.equals(key) || KEY_BACKSPACE.equals(key) || KEY_SYMBOLS.equals(key)
-                || KEY_LETTERS.equals(key) || KEY_ENTER.equals(key)) {
+                || KEY_LETTERS.equals(key) || KEY_MORE_SYMBOLS.equals(key) || KEY_ENTER.equals(key)) {
             return 1.5f;
         }
         return 1f;
@@ -232,7 +241,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
             return KEY_MORE_SYMBOLS;
         }
         if (key.length() == 1 && Character.isLetter(key.charAt(0))) {
-            return shiftOn ? key.toUpperCase() : key;
+            return shiftState == SHIFT_OFF ? key : key.toUpperCase();
         }
         return key;
     }
@@ -245,7 +254,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
 
         switch (key) {
             case KEY_SHIFT:
-                shiftOn = !shiftOn;
+                shiftState = (shiftState + 1) % 3;
                 rebuildKeyboard();
                 return;
             case KEY_BACKSPACE:
@@ -255,7 +264,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
                 handleSpace(ic);
                 return;
             case KEY_ENTER:
-                commitComposing(ic);
+                handleEnter(ic);
                 ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
                 ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER));
                 return;
@@ -305,19 +314,26 @@ public class ConvoyPinyinImeService extends InputMethodService {
         String value = labelFor(key);
         char ch = value.charAt(0);
         if (symbolsMode) {
-            commitComposing(ic);
+            commitComposingForCurrentMode(ic);
             ic.commitText(value, 1);
             return;
         }
 
         if (inputMode == InputMode.ENGLISH) {
             if (pinyinEngine.isComposingChar(ch)) {
+                if (composing.length() == 0) {
+                    englishWordCase = Character.isUpperCase(ch)
+                            ? (shiftState == SHIFT_LOCK ? ENGLISH_CASE_ALL_CAPS : ENGLISH_CASE_CAPITALIZE)
+                            : ENGLISH_CASE_NORMAL;
+                }
                 composing.append(Character.toLowerCase(ch));
+                ic.commitText(String.valueOf(ch), 1);
+                consumeSingleShift();
                 refreshComposingUi();
                 refreshCandidates();
                 return;
             }
-            commitComposing(ic);
+            clearComposingState();
             ic.commitText(String.valueOf(ch), 1);
             return;
         }
@@ -328,12 +344,20 @@ public class ConvoyPinyinImeService extends InputMethodService {
             refreshCandidates();
             return;
         }
-        commitComposing(ic);
+        commitComposingForCurrentMode(ic);
         ic.commitText(String.valueOf(ch), 1);
     }
 
     private void handleBackspace(InputConnection ic) {
-        if (composing.length() > 0) {
+        if (inputMode == InputMode.ENGLISH && composing.length() > 0) {
+            composing.deleteCharAt(composing.length() - 1);
+            if (composing.length() == 0) {
+                englishWordCase = ENGLISH_CASE_NORMAL;
+            }
+            ic.deleteSurroundingText(1, 0);
+            refreshComposingUi();
+            refreshCandidates();
+        } else if (composing.length() > 0) {
             composing.deleteCharAt(composing.length() - 1);
             refreshComposingUi();
             refreshCandidates();
@@ -343,17 +367,23 @@ public class ConvoyPinyinImeService extends InputMethodService {
     }
 
     private void handleSpace(InputConnection ic) {
-        if (composing.length() > 0) {
-            commitComposingAsRaw(ic);
-            if (inputMode == InputMode.ENGLISH) {
-                ic.commitText(" ", 1);
-            }
-        } else {
-            ic.commitText(" ", 1);
+        if (inputMode == InputMode.ENGLISH) {
+            applyAutoCorrectIfNeeded(ic);
+            clearComposingState();
         }
+        ic.commitText(" ", 1);
     }
 
-    private void commitComposing(InputConnection ic) {
+    private void handleEnter(InputConnection ic) {
+        if (inputMode == InputMode.ENGLISH) {
+            applyAutoCorrectIfNeeded(ic);
+            clearComposingState();
+            return;
+        }
+        commitComposingForCurrentMode(ic);
+    }
+
+    private void commitComposingForCurrentMode(InputConnection ic) {
         if (composing.length() == 0) {
             return;
         }
@@ -377,24 +407,64 @@ public class ConvoyPinyinImeService extends InputMethodService {
         if (composing.length() == 0) {
             return;
         }
-        ic.commitText(formatForEnglish(composing.toString()), 1);
-        composing.setLength(0);
-        refreshComposingUi();
-        refreshCandidates();
+        if (inputMode != InputMode.ENGLISH) {
+            ic.commitText(formatForEnglish(composing.toString()), 1);
+        }
+        clearComposingState();
     }
 
     private void commitCandidate(InputConnection ic, String candidate) {
+        if (inputMode == InputMode.ENGLISH && composing.length() > 0) {
+            ic.deleteSurroundingText(composing.length(), 0);
+        }
         ic.commitText(formatForEnglish(candidate), 1);
+        clearComposingState();
+        if (ImePreferences.isAutoSpaceEnabled(this)) {
+            ic.commitText(" ", 1);
+        }
+    }
+
+    private String formatForEnglish(String text) {
+        if (inputMode != InputMode.ENGLISH || text.isEmpty()) {
+            return text;
+        }
+        if (englishWordCase == ENGLISH_CASE_ALL_CAPS) {
+            return text.toUpperCase();
+        }
+        if (englishWordCase == ENGLISH_CASE_CAPITALIZE) {
+            return Character.toUpperCase(text.charAt(0)) + text.substring(1);
+        }
+        return text;
+    }
+
+    private void applyAutoCorrectIfNeeded(InputConnection ic) {
+        if (inputMode != InputMode.ENGLISH || composing.length() == 0 || !ImePreferences.isAutoCorrectEnabled(this)) {
+            return;
+        }
+        List<String> candidates = englishEngine.getCandidates(composing.toString());
+        if (candidates.isEmpty()) {
+            return;
+        }
+        String top = candidates.get(0);
+        if (top.equalsIgnoreCase(composing.toString())) {
+            return;
+        }
+        ic.deleteSurroundingText(composing.length(), 0);
+        ic.commitText(formatForEnglish(top), 1);
+    }
+
+    private void clearComposingState() {
         composing.setLength(0);
+        englishWordCase = ENGLISH_CASE_NORMAL;
         refreshComposingUi();
         refreshCandidates();
     }
 
-    private String formatForEnglish(String text) {
-        if (inputMode != InputMode.ENGLISH || !shiftOn || text.isEmpty()) {
-            return text;
+    private void consumeSingleShift() {
+        if (shiftState == SHIFT_ONCE) {
+            shiftState = SHIFT_OFF;
+            rebuildKeyboard();
         }
-        return Character.toUpperCase(text.charAt(0)) + text.substring(1);
     }
 
     private void refreshComposingUi() {
@@ -500,6 +570,7 @@ public class ConvoyPinyinImeService extends InputMethodService {
     private boolean isRepeatableKey(String key) {
         return !KEY_SHIFT.equals(key)
             && !KEY_SYMBOLS.equals(key)
+            && !KEY_MORE_SYMBOLS.equals(key)
             && !KEY_LETTERS.equals(key)
             && !KEY_ENTER.equals(key);
     }

@@ -22,6 +22,7 @@ public class SetupActivity extends Activity {
         Button openPicker = findViewById(R.id.open_input_picker);
         Switch darkMode = findViewById(R.id.dark_mode_toggle);
         Switch autoCorrect = findViewById(R.id.auto_correct_toggle);
+        Switch autoSpace = findViewById(R.id.auto_space_toggle);
 
         openSettings.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)));
         openPicker.setOnClickListener(this::showPicker);
@@ -35,6 +36,10 @@ public class SetupActivity extends Activity {
         autoCorrect.setChecked(ImePreferences.isAutoCorrectEnabled(this));
         autoCorrect.setOnCheckedChangeListener((buttonView, isChecked) ->
             ImePreferences.setAutoCorrectEnabled(this, isChecked));
+
+        autoSpace.setChecked(ImePreferences.isAutoSpaceEnabled(this));
+        autoSpace.setOnCheckedChangeListener((buttonView, isChecked) ->
+            ImePreferences.setAutoSpaceEnabled(this, isChecked));
     }
 
     private void showPicker(View ignored) {
